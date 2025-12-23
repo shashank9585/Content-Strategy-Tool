@@ -1,0 +1,7 @@
+{
+  "name": "STRATEGY CORE",
+  "description": "Professional campaign orchestration and AI-driven creative synthesis for elite content teams.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
