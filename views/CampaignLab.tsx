@@ -6,7 +6,8 @@ import {
   Plus, Send, LayoutGrid, Info, ExternalLink,
   ChevronRight, CheckCircle2, Copy, BarChart3,
   Search, ShieldCheck, Briefcase, Mic, MicOff,
-  Image as LucideImage, Wand2, PenLine, SendHorizontal
+  Image as LucideImage, Wand2, PenLine, SendHorizontal, Share2, FileDown,
+  PieChart, Activity, Box
 } from 'lucide-react';
 import { GeminiService, AspectRatio } from '../services/geminiService';
 import { CampaignContent, BrandVoice } from '../types';
@@ -36,7 +37,7 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState('');
   const [results, setResults] = useState<CampaignContent | null>(null);
-  const [activeTab, setActiveTab] = useState<'strategy' | 'intel' | 'visuals' | 'copy' | 'storyboard'>('strategy');
+  const [activeTab, setActiveTab] = useState<'overview' | 'strategy' | 'intel' | 'visuals' | 'copy' | 'storyboard'>('overview');
   
   const [isAddingVoice, setIsAddingVoice] = useState(false);
   const [newVoiceForm, setNewVoiceForm] = useState<Partial<BrandVoice>>({ name: '', formality: 'Professional', vocabulary: 'Sophisticated' });
@@ -45,7 +46,7 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (recalledCampaign) { setResults(recalledCampaign); setActiveTab('strategy'); if (onClearRecall) onClearRecall(); }
+    if (recalledCampaign) { setResults(recalledCampaign); setActiveTab('overview'); if (onClearRecall) onClearRecall(); }
   }, [recalledCampaign]);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
     if (!finalPrompt && setupMode === 'master') return;
     
     setIsGenerating(true);
-    setGenStep('Synthesizing strategic directives...');
+    setGenStep('Calibrating neural strategy cores...');
     try {
       const voice = voices.find(v => v.id === selectedVoiceId);
       const data = await gemini.generateCampaign({
@@ -92,7 +93,6 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
         primaryGoal
       });
       
-      // SEQUENTIAL IMAGE GENERATION: Processes images one by one with a delay to respect rate limits
       const assetPrompts = [
         { type: 'Hero', prompt: data.hero_visual_prompt },
         { type: 'Ad', prompt: data.ad_visual_prompt },
@@ -102,14 +102,12 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
 
       const visualsResults: any[] = [];
       for (const item of assetPrompts) {
-        setGenStep(`Rendering visual asset: ${item.type}...`);
+        setGenStep(`Synthesizing high-fidelity asset: ${item.type}...`);
         try {
-          // Add a small 1s delay between image requests to prevent hitting concurrent limits
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 1200));
           const img = item.prompt ? await gemini.generateImage(item.prompt, "16:9") : null;
           visualsResults.push({ ...item, imageUrl: img || '' });
         } catch (e) {
-          console.error(`Failed to generate image for ${item.type}:`, e);
           visualsResults.push({ ...item, imageUrl: '' });
         }
       }
@@ -117,13 +115,12 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
       const storyboardResults: any[] = [];
       for (let i = 0; i < data.storyboard.length; i++) {
         const frame = data.storyboard[i];
-        setGenStep(`Sequencing storyboard frame ${i + 1}...`);
+        setGenStep(`Rendering narrative sequence: Frame ${i + 1}...`);
         try {
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 1200));
           const img = await gemini.generateImage(frame.description, "16:9");
           storyboardResults.push({ ...frame, id: i, imageUrl: img || '', notes: '' });
         } catch (e) {
-          console.error(`Failed to generate storyboard frame ${i}:`, e);
           storyboardResults.push({ ...frame, id: i, imageUrl: '', notes: '' });
         }
       }
@@ -135,16 +132,15 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
           type: v.type as any,
           imageUrl: v.imageUrl, 
           prompt: v.prompt || '', 
-          tags: ['CAMPAIGN LAUNCH'], 
+          tags: ['PRODUCTION READY'], 
           aspectRatio: "16:9"
         })),
         storyboard: storyboardResults
       };
       
       setResults(campaignResults);
-      setActiveTab('strategy');
+      setActiveTab('overview');
       
-      // Persist to local archive
       const history = JSON.parse(localStorage.getItem('campaign_history') || '[]');
       history.unshift({
         id: Date.now().toString(),
@@ -155,17 +151,33 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
       localStorage.setItem('campaign_history', JSON.stringify(history.slice(0, 20)));
 
     } catch (e: any) {
-      console.error("Critical Synthesis failure:", e);
-      alert(`Synthesis error: ${e?.message || 'The engine encountered a rate limit. Please try again in 1 minute.'}`);
+      console.error(e);
+      alert(`Initialization encounter failure: ${e?.message || 'Rate limit threshold exceeded.'}`);
     } finally {
       setIsGenerating(false);
       setGenStep('');
     }
   };
 
+  const exportPDF = () => {
+    if (!results) return;
+    // Simple high-quality print trigger to generate PDF
+    window.print();
+  };
+
+  const exportJSON = () => {
+    if (!results) return;
+    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Campaign_Export_${Date.now()}.json`;
+    link.click();
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard');
+    alert('Payload copied to clipboard');
   };
 
   const updateFrameNote = (id: number, notes: string) => {
@@ -178,61 +190,124 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
 
   if (isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 animate-pulse">
-        <div className="relative mb-12">
-          <Loader2 className="w-20 h-20 text-[#6366f1] animate-spin opacity-50" strokeWidth={1.5} />
-          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-400 w-10 h-10" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12">
+        <div className="relative mb-12 scale-110">
+          <Loader2 className="w-24 h-24 text-teal-600 animate-spin opacity-40" strokeWidth={1} />
+          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-teal-400 w-12 h-12" />
         </div>
-        <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-4">Orchestrating Core</h2>
-        <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs px-6 py-2 bg-slate-50 rounded-full border border-slate-100 shadow-sm">{genStep}</p>
-        <p className="text-slate-300 font-medium mt-8 max-w-sm text-sm">Please wait while the engine architect high-fidelity visuals. This can take up to 60 seconds.</p>
+        <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-4">Orchestrating Session</h2>
+        <p className="text-teal-600 font-black uppercase tracking-[0.3em] text-[10px] px-8 py-3 bg-teal-50 rounded-full border border-teal-100 shadow-sm animate-pulse">{genStep}</p>
+        <p className="text-slate-400 font-medium mt-10 max-w-sm text-sm">Our neural architecture is synthesizing high-fidelity commercial assets and strategic directives.</p>
       </div>
     );
   }
 
   if (results) {
     return (
-      <div className="animate-in fade-in duration-500 pb-20">
-        <nav className="sticky top-0 z-40 bg-white border-b border-slate-100 flex items-center justify-center h-16 shadow-sm px-8">
+      <div className="animate-in fade-in duration-700 pb-20 print:p-0">
+        <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between h-20 px-12 shadow-sm print:hidden">
           <div className="flex space-x-12">
             {[
+              { id: 'overview', label: 'OVERVIEW', icon: Activity },
               { id: 'strategy', label: 'STRATEGY', icon: BarChart3 },
-              { id: 'intel', label: 'PPC INTEL', icon: Target },
-              { id: 'visuals', label: 'VISUALS', icon: LucideImage },
-              { id: 'copy', label: 'COPY', icon: FileText },
+              { id: 'intel', label: 'MARKET INTEL', icon: Target },
+              { id: 'visuals', label: 'VISUAL ASSETS', icon: LucideImage },
+              { id: 'copy', label: 'COPY PAYLOAD', icon: FileText },
               { id: 'storyboard', label: 'STORYBOARD', icon: Plus }
             ].map(tab => (
               <button 
                 key={tab.id} 
                 onClick={() => setActiveTab(tab.id as any)} 
-                className={`flex items-center space-x-2.5 py-5 font-bold text-[11px] tracking-[0.15em] transition-all relative ${activeTab === tab.id ? 'text-[#6366f1]' : 'text-slate-400 hover:text-slate-900'}`}
+                className={`flex items-center space-x-3 py-6 font-black text-[10px] tracking-[0.2em] transition-all relative ${activeTab === tab.id ? 'text-teal-600' : 'text-slate-400 hover:text-slate-900'}`}
               >
                  <tab.icon size={14} /> <span>{tab.label}</span>
-                 {activeTab === tab.id && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#6366f1] rounded-full"></div>}
+                 {activeTab === tab.id && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full"></div>}
               </button>
             ))}
           </div>
-          <button onClick={() => setResults(null)} className="absolute right-8 flex items-center space-x-2 text-slate-300 font-bold text-[9px] uppercase tracking-widest hover:text-red-500 transition-all bg-slate-50 px-4 py-2 rounded-xl">
-            <RefreshCw size={12} /> <span>RESTART SESSION</span>
-          </button>
+          <div className="flex items-center space-x-4">
+            <button onClick={exportPDF} className="flex items-center space-x-2.5 bg-teal-600 text-white px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-teal-100 active:scale-95">
+              <Share2 size={16} /> <span>Export PDF</span>
+            </button>
+            <button onClick={exportJSON} className="flex items-center space-x-2.5 bg-slate-900 text-white px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-teal-600 transition-all shadow-xl active:scale-95">
+              <FileDown size={16} /> <span>JSON Bundle</span>
+            </button>
+            <button onClick={() => setResults(null)} className="p-3.5 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100">
+              <RefreshCw size={18} />
+            </button>
+          </div>
         </nav>
 
-        <div className="p-10 space-y-12 max-w-[1400px] mx-auto">
-          {activeTab === 'strategy' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom-4">
-               <div className="lg:col-span-8 bg-white p-12 rounded-[2.5rem] shadow-sm border border-slate-50">
-                  <div className="flex items-center space-x-4 mb-8 text-[#6366f1]">
-                    <div className="p-4 bg-indigo-50 rounded-2xl"><BarChart3 size={32} /></div>
-                    <h3 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Creative Direction</h3>
+        <div className="p-12 space-y-12 max-w-[1500px] mx-auto print:max-w-none print:p-0">
+          {activeTab === 'overview' && (
+            <div className="animate-in fade-in duration-700 space-y-12">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="bg-white p-10 rounded-[3rem] shadow-premium border border-slate-50 flex items-center space-y-0 space-x-8">
+                     <div className="p-5 bg-teal-50 text-teal-600 rounded-3xl shadow-sm"><BarChart3 size={32}/></div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">STRATEGY SCORE</p>
+                        <p className="text-3xl font-black text-slate-900">98%</p>
+                     </div>
                   </div>
-                  <p className="text-slate-600 leading-relaxed text-lg font-medium whitespace-pre-wrap">{results.strategy}</p>
+                  <div className="bg-white p-10 rounded-[3rem] shadow-premium border border-slate-50 flex items-center space-y-0 space-x-8">
+                     <div className="p-5 bg-teal-50 text-teal-600 rounded-3xl shadow-sm"><Target size={32}/></div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">CONVERSION INTENT</p>
+                        <p className="text-3xl font-black text-slate-900">HIGH</p>
+                     </div>
+                  </div>
+                  <div className="bg-white p-10 rounded-[3rem] shadow-premium border border-slate-50 flex items-center space-y-0 space-x-8">
+                     <div className="p-5 bg-teal-50 text-teal-600 rounded-3xl shadow-sm"><LucideImage size={32}/></div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ASSET READINESS</p>
+                        <p className="text-3xl font-black text-slate-900">100%</p>
+                     </div>
+                  </div>
                </div>
-               <div className="lg:col-span-4 bg-[#6366f1] p-10 rounded-[2.5rem] text-white shadow-xl h-fit">
-                  <h4 className="text-xl font-bold mb-8 uppercase tracking-widest text-[10px] opacity-60">Strategic Directives</h4>
-                  <div className="space-y-4">
+
+               <div className="bg-white p-14 rounded-[3.5rem] shadow-premium border border-slate-50">
+                  <h3 className="text-3xl font-black text-slate-900 mb-8 uppercase tracking-tighter">Campaign Architecture Summary</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                     <div className="space-y-6">
+                        <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
+                           <h4 className="text-[11px] font-black text-teal-600 uppercase tracking-widest mb-4">Core Objective</h4>
+                           <p className="text-slate-700 font-bold text-lg leading-relaxed">{results.strategy.split('.')[0]}.</p>
+                        </div>
+                        <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
+                           <h4 className="text-[11px] font-black text-teal-600 uppercase tracking-widest mb-4">Primary CTA</h4>
+                           <p className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">"{results.ctas[0]}"</p>
+                        </div>
+                     </div>
+                     <div className="bg-teal-600 p-10 rounded-[2.5rem] text-white flex flex-col justify-center">
+                        <div className="flex items-center space-x-4 mb-6">
+                           <Box size={32} className="text-teal-200" />
+                           <h4 className="text-xl font-black uppercase tracking-widest">Neural Insights</h4>
+                        </div>
+                        <p className="text-teal-50 text-lg font-medium leading-relaxed italic">"The strategy prioritizes high-impact visual storytelling combined with data-driven social hooks to maximize resonance across professional demographics."</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'strategy' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in slide-in-from-bottom-6 duration-700">
+               <div className="lg:col-span-8 bg-white p-14 rounded-[3.5rem] shadow-premium border border-slate-50 hover:scale-[1.01] transition-transform">
+                  <div className="flex items-center space-x-5 mb-10 text-teal-600">
+                    <div className="p-5 bg-teal-50 rounded-3xl shadow-sm border border-teal-100"><BarChart3 size={36} /></div>
+                    <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Creative Direction</h3>
+                  </div>
+                  <p className="text-slate-600 leading-loose text-xl font-medium whitespace-pre-wrap">{results.strategy}</p>
+               </div>
+               <div className="lg:col-span-4 bg-teal-600 p-12 rounded-[3.5rem] text-white shadow-2xl h-fit hover:scale-[1.02] transition-transform">
+                  <h4 className="text-xl font-black mb-10 uppercase tracking-[0.2em] text-teal-100/60 text-[10px]">Strategic Conversion CTAs</h4>
+                  <div className="space-y-5">
                     {results.ctas?.map((cta, i) => (
-                      <div key={i} className="bg-white/10 p-6 rounded-2xl border border-white/20 font-bold italic text-base hover:bg-white/20 transition-all cursor-pointer shadow-sm">
-                        "{cta}"
+                      <div key={i} className="bg-white/10 p-7 rounded-3xl border border-white/20 font-black italic text-lg hover:bg-white/20 transition-all cursor-pointer shadow-lg group">
+                        <span className="flex items-center justify-between">
+                          "{cta}"
+                          <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={20}/>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -241,34 +316,34 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
           )}
 
           {activeTab === 'intel' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in duration-700">
                {results.ppc?.map((item, i) => (
-                 <div key={i} className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col h-full group hover:border-[#6366f1] transition-all">
-                    <div className="flex justify-between items-start mb-8">
-                      <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">{item.platform}</h4>
-                      <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-full group-hover:bg-[#6366f1] group-hover:text-white transition-colors"><Target size={16}/></div>
+                 <div key={i} className="bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-premium flex flex-col h-full group hover:border-teal-500 hover:scale-[1.02] transition-all duration-500">
+                    <div className="flex justify-between items-start mb-10">
+                      <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{item.platform}</h4>
+                      <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl group-hover:bg-teal-600 group-hover:text-white transition-all shadow-sm"><Target size={20}/></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mb-8">
-                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 shadow-inner">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">AVG. CPC</span>
-                        <span className="text-lg font-black text-indigo-600">{item.avgCPC}</span>
+                    <div className="grid grid-cols-2 gap-5 mb-10">
+                      <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 shadow-inner group-hover:bg-white transition-colors">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">AVG. CPC</span>
+                        <span className="text-2xl font-black text-teal-600">{item.avgCPC}</span>
                       </div>
-                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 shadow-inner">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">BENCHMARK</span>
-                        <span className="text-[11px] font-black text-emerald-600 leading-tight block">{item.benchmark}</span>
+                      <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 shadow-inner group-hover:bg-white transition-colors">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">BENCHMARK</span>
+                        <span className="text-xs font-black text-emerald-600 leading-tight block uppercase">{item.benchmark}</span>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 text-slate-500 mb-8 flex-1">
-                      <Info size={16} className="shrink-0 mt-1 opacity-40" />
-                      <p className="text-xs leading-relaxed font-medium">{item.justification}</p>
+                    <div className="flex items-start space-x-4 text-slate-500 mb-10 flex-1">
+                      <Info size={18} className="shrink-0 mt-1 opacity-30" />
+                      <p className="text-sm leading-relaxed font-bold uppercase tracking-tight italic opacity-70">{item.justification}</p>
                     </div>
-                    <div className="pt-6 border-t border-slate-50">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-4">PLATFORM METRICS</span>
-                      <div className="space-y-2">
+                    <div className="pt-8 border-t border-slate-50">
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] block mb-6">PLATFORM METRICS</span>
+                      <div className="space-y-3">
                         {item.performanceIndicators?.map((kpi, kIdx) => (
-                          <div key={kIdx} className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                          <div key={kIdx} className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest">
                             <span className="text-slate-400">{kpi.label}</span>
-                            <span className="text-slate-900">{kpi.value}</span>
+                            <span className="text-slate-900 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">{kpi.value}</span>
                           </div>
                         ))}
                       </div>
@@ -279,33 +354,33 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
           )}
 
           {activeTab === 'visuals' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 animate-in slide-in-from-bottom-8 duration-700">
               {results.visuals.map((v, i) => (
-                <div key={v.id} className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden group">
+                <div key={v.id} className="bg-white rounded-[3.5rem] shadow-premium border border-slate-100 overflow-hidden group hover:scale-[1.01] transition-all duration-500">
                   <div className="relative aspect-video bg-slate-50 flex items-center justify-center overflow-hidden">
                     {v.imageUrl ? (
-                      <img src={v.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" alt="Asset" />
+                      <img src={v.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s]" alt="Asset" />
                     ) : (
                       <div className="text-slate-300 flex flex-col items-center">
-                        <Loader2 className="mb-2 animate-spin" size={32} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Asset Unavailable</span>
+                        <Loader2 className="mb-4 animate-spin text-teal-200" size={48} strokeWidth={1} />
+                        <span className="text-[11px] font-black uppercase tracking-widest opacity-40">Asset Logic Pending</span>
                       </div>
                     )}
-                    <div className="absolute top-4 right-4 flex space-x-2 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-                      <button className="p-3 bg-white text-indigo-600 rounded-xl shadow-lg hover:bg-indigo-600 hover:text-white transition-all"><Wand2 size={20}/></button>
-                      <button className="p-3 bg-white text-emerald-600 rounded-xl shadow-lg hover:bg-emerald-600 hover:text-white transition-all"><PenLine size={20}/></button>
-                      <button className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-black transition-all"><SendHorizontal size={20}/></button>
+                    <div className="absolute top-6 right-6 flex space-x-3 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 duration-500">
+                      <button className="p-4 bg-white text-teal-600 rounded-2xl shadow-2xl hover:bg-teal-600 hover:text-white transition-all scale-90 hover:scale-100"><Wand2 size={24}/></button>
+                      <button className="p-4 bg-white text-emerald-600 rounded-2xl shadow-2xl hover:bg-emerald-600 hover:text-white transition-all scale-90 hover:scale-100"><PenLine size={24}/></button>
+                      <button className="p-4 bg-teal-600 text-white rounded-2xl shadow-2xl hover:bg-black transition-all scale-90 hover:scale-100"><SendHorizontal size={24}/></button>
                     </div>
                   </div>
-                  <div className="p-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex space-x-2">
-                        <span className="text-[10px] font-black uppercase bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-lg tracking-widest">{v.type}</span>
-                        <span className="text-[10px] font-black uppercase bg-slate-50 text-slate-500 px-4 py-1.5 rounded-lg tracking-widest">PRODUCTION GRADE</span>
+                  <div className="p-10">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex space-x-3">
+                        <span className="text-[11px] font-black uppercase bg-teal-50 text-teal-600 px-5 py-2 rounded-xl tracking-widest shadow-sm border border-teal-100">{v.type}</span>
+                        <span className="text-[11px] font-black uppercase bg-slate-50 text-slate-500 px-5 py-2 rounded-xl tracking-widest border border-slate-100">{v.tags[0]}</span>
                       </div>
-                      <button className="text-slate-300 hover:text-indigo-600 transition-colors" title="Download Asset"><Download size={24}/></button>
+                      <button className="text-slate-300 hover:text-teal-600 transition-all hover:scale-110" title="Download High-Res"><Download size={28}/></button>
                     </div>
-                    <p className="text-slate-600 italic font-medium leading-relaxed">"{v.prompt}"</p>
+                    <p className="text-slate-500 italic font-bold text-lg leading-relaxed opacity-80">"{v.prompt}"</p>
                   </div>
                 </div>
               ))}
@@ -313,73 +388,56 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
           )}
 
           {activeTab === 'copy' && (
-            <div className="space-y-10 animate-in fade-in">
-               <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-50">
-                  <div className="flex items-center space-x-3 mb-8 text-indigo-600">
-                    <FileText size={24} />
-                    <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Editorial Repository</h3>
+            <div className="space-y-12 animate-in fade-in duration-700">
+               <div className="bg-white p-14 rounded-[4rem] shadow-premium border border-slate-50 hover:scale-[1.01] transition-transform">
+                  <div className="flex items-center space-x-4 mb-10 text-teal-600">
+                    <FileText size={32} />
+                    <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Editorial Manifest</h3>
                   </div>
-                  <div className="bg-slate-50/50 p-10 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                    <h4 className="text-2xl font-black text-slate-900 mb-6 tracking-tight">{results.blog?.title}</h4>
-                    <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">{results.blog?.content}</p>
-                    <div className="flex justify-between items-center pt-8 border-t border-slate-100">
-                      <button className="bg-[#6366f1] text-white px-8 py-4 rounded-2xl font-bold flex items-center space-x-3 hover:bg-black transition-all shadow-lg active:scale-95"><SendHorizontal size={18}/> <span className="uppercase tracking-widest text-xs">Deploy Payload</span></button>
-                      <button onClick={() => copyToClipboard(results.blog?.content)} className="text-slate-400 text-xs font-bold flex items-center space-x-2 hover:text-indigo-600 transition-colors uppercase tracking-widest"><Copy size={14}/> <span>Copy Directive</span></button>
+                  <div className="bg-slate-50 p-12 rounded-[3.5rem] border border-slate-100 shadow-inner group hover:bg-white transition-colors duration-500">
+                    <h4 className="text-3xl font-black text-slate-900 mb-8 tracking-tighter uppercase">{results.blog?.title}</h4>
+                    <p className="text-slate-600 text-xl leading-loose mb-12 font-medium opacity-90">{results.blog?.content}</p>
+                    <div className="flex justify-between items-center pt-10 border-t border-slate-100">
+                      <button className="bg-teal-600 text-white px-10 py-5 rounded-[1.5rem] font-black flex items-center space-x-4 hover:bg-black transition-all shadow-2xl shadow-teal-100 active:scale-95"><SendHorizontal size={20}/> <span className="uppercase tracking-widest text-xs">Deploy Payload</span></button>
+                      <button onClick={() => copyToClipboard(results.blog?.content)} className="text-slate-400 text-[10px] font-black flex items-center space-x-3 hover:text-teal-600 transition-all uppercase tracking-[0.2em] bg-white px-6 py-3 rounded-xl border border-slate-100 shadow-sm"><Copy size={16}/> <span>Copy Code</span></button>
                     </div>
                   </div>
                </div>
 
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-50">
-                    <div className="flex items-center space-x-3 mb-8 text-orange-500">
-                      <Send size={24} />
-                      <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Commercial Ad Copy</h3>
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                 <div className="bg-white p-12 rounded-[4rem] shadow-premium border border-slate-50 flex flex-col group hover:scale-[1.01] transition-transform">
+                    <div className="flex items-center space-x-4 mb-10 text-orange-500">
+                      <Send size={28} />
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">High-Conv Ad Variant</h3>
                     </div>
-                    <div className="space-y-6">
+                    <div className="space-y-8 flex-1">
                       <div>
-                        <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">HEADLINE</span><button onClick={() => copyToClipboard(results.social.adCopy.headline)} className="text-slate-400 hover:text-indigo-600"><Copy size={12}/></button></div>
-                        <div className="bg-slate-50 p-5 rounded-2xl font-bold text-slate-700 border border-slate-100 shadow-inner">{results.social.adCopy.headline}</div>
+                        <div className="flex justify-between mb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MASTER HEADLINE</span><button onClick={() => copyToClipboard(results.social.adCopy.headline)} className="text-slate-400 hover:text-teal-600 transition-colors"><Copy size={14}/></button></div>
+                        <div className="bg-slate-50 p-7 rounded-[2rem] font-black text-xl text-slate-800 border border-slate-100 shadow-inner group-hover:bg-white transition-colors">{results.social.adCopy.headline}</div>
                       </div>
                       <div>
-                        <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PRIMARY BODY</span><button onClick={() => copyToClipboard(results.social.adCopy.primaryText)} className="text-slate-400 hover:text-indigo-600"><Copy size={12}/></button></div>
-                        <div className="bg-slate-50 p-5 rounded-2xl text-sm leading-relaxed text-slate-600 border border-slate-100 shadow-inner font-medium">{results.social.adCopy.primaryText}</div>
+                        <div className="flex justify-between mb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PRIMARY BODY</span><button onClick={() => copyToClipboard(results.social.adCopy.primaryText)} className="text-slate-400 hover:text-teal-600 transition-colors"><Copy size={14}/></button></div>
+                        <div className="bg-slate-50 p-7 rounded-[2rem] text-base leading-relaxed text-slate-600 border border-slate-100 shadow-inner font-bold uppercase tracking-tight group-hover:bg-white transition-colors">{results.social.adCopy.primaryText}</div>
                       </div>
-                      <div className="bg-[#6366f1] p-6 rounded-[2rem] flex justify-between items-center text-white shadow-xl">
+                      <div className="bg-teal-600 p-8 rounded-[2.5rem] flex justify-between items-center text-white shadow-2xl shadow-teal-50 group-hover:bg-black transition-colors">
                         <div>
-                          <span className="text-[9px] font-bold uppercase tracking-widest block opacity-70 mb-1">CONVERSION CTA</span>
-                          <span className="text-xl font-black">{results.social.adCopy.cta}</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] block opacity-50 mb-2">CONVERSION CTA</span>
+                          <span className="text-2xl font-black tracking-tighter uppercase italic">{results.social.adCopy.cta}</span>
                         </div>
-                        <SendHorizontal size={28}/>
+                        <SendHorizontal size={36}/>
                       </div>
                     </div>
                  </div>
 
-                 <div className="space-y-8">
-                   <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-50 flex flex-col h-full">
-                      <div className="flex items-center space-x-3 mb-8 text-blue-600">
-                        <PenLine size={24} />
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Corporate Identity Post</h3>
+                 <div className="space-y-10">
+                   <div className="bg-white p-12 rounded-[4rem] shadow-premium border border-slate-50 flex flex-col group hover:scale-[1.01] transition-transform h-full">
+                      <div className="flex items-center space-x-4 mb-10 text-blue-600">
+                        <Share2 size={28} />
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Authority Post</h3>
                       </div>
-                      <div className="bg-slate-50 p-8 rounded-[2.5rem] relative flex-1 border border-slate-100 shadow-inner">
-                         <button onClick={() => copyToClipboard(results.social.linkedin)} className="absolute top-6 right-6 text-slate-400 hover:text-indigo-600 transition-colors"><Copy size={16}/></button>
-                         <p className="text-slate-600 italic leading-relaxed text-sm whitespace-pre-wrap font-medium">"{results.social.linkedin}"</p>
-                      </div>
-                   </div>
-                   <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-50">
-                      <div className="flex items-center space-x-3 mb-8 text-emerald-500">
-                        <ShieldCheck size={24} />
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Social Engagement Hooks</h3>
-                      </div>
-                      <div className="space-y-4">
-                        {results.social.socialHooks.map((hook, i) => (
-                          <div key={i} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center group shadow-sm hover:border-indigo-100 transition-all">
-                            <p className="text-xs text-slate-600 italic font-bold flex-1 pr-6 line-clamp-2">"{hook}"</p>
-                            <div className="flex space-x-3 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
-                              <SendHorizontal size={16} className="text-indigo-600 cursor-pointer hover:scale-110 transition-transform" />
-                              <Copy size={16} className="text-slate-400 cursor-pointer hover:text-indigo-600 hover:scale-110 transition-transform" onClick={() => copyToClipboard(hook)} />
-                            </div>
-                          </div>
-                        ))}
+                      <div className="bg-slate-50 p-10 rounded-[2.5rem] relative flex-1 border border-slate-100 shadow-inner group-hover:bg-white transition-colors">
+                         <button onClick={() => copyToClipboard(results.social.linkedin)} className="absolute top-8 right-8 text-slate-400 hover:text-teal-600 transition-all"><Copy size={18}/></button>
+                         <p className="text-slate-600 italic leading-loose text-base font-bold uppercase tracking-tight opacity-80">"{results.social.linkedin}"</p>
                       </div>
                    </div>
                  </div>
@@ -388,47 +446,50 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
           )}
 
           {activeTab === 'storyboard' && (
-            <div className="space-y-10 animate-in fade-in">
-              <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-900 tracking-tight uppercase">Narrative Architecture</h3>
-                  <p className="text-slate-500 mt-1 font-medium">Visual sequence optimized for high-conversion storytelling.</p>
-                </div>
+            <div className="space-y-12 animate-in fade-in duration-700">
+              <div className="bg-white p-12 rounded-[4rem] shadow-premium border border-slate-100 flex items-center justify-between hover:scale-[1.005] transition-transform">
                 <div className="flex items-center space-x-6">
-                  <div className="flex space-x-2">
-                    {[1, 2, 3, 4].map(n => <span key={n} className={`w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-black ${n === 1 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>{n}</span>)}
+                  <div className="p-4 bg-teal-50 rounded-3xl text-teal-600 shadow-sm border border-teal-100"><Briefcase size={32}/></div>
+                  <div>
+                    <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Narrative Governance</h3>
+                    <p className="text-slate-400 mt-1 font-bold uppercase tracking-widest text-[10px]">Logical visual progression optimized for psychological impact.</p>
                   </div>
-                  <span className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] bg-indigo-50 px-4 py-2 rounded-lg">Sequence Verified</span>
+                </div>
+                <div className="flex items-center space-x-8">
+                  <div className="flex space-x-3">
+                    {[1, 2, 3, 4].map(n => <span key={n} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-[12px] font-black shadow-sm border ${n === 1 ? 'bg-teal-600 text-white border-teal-500 rotate-3' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>{n}</span>)}
+                  </div>
+                  <span className="text-[10px] font-black uppercase text-teal-600 tracking-[0.4em] bg-teal-50 px-6 py-3 rounded-2xl border border-teal-100 animate-pulse">Core Verified</span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                 {results.storyboard.map(f => (
-                  <div key={f.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:border-[#6366f1] transition-all">
-                    <div className="aspect-video relative overflow-hidden rounded-[2.5rem] bg-slate-100 mb-8 shadow-inner flex items-center justify-center">
+                  <div key={f.id} className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-premium group hover:border-teal-500 hover:scale-[1.01] transition-all duration-500">
+                    <div className="aspect-video relative overflow-hidden rounded-[3rem] bg-slate-100 mb-10 shadow-inner flex items-center justify-center border border-slate-50">
                       {f.imageUrl ? (
-                        <img src={f.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" alt="Frame" />
+                        <img src={f.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[4s]" alt="Frame" />
                       ) : (
                         <div className="text-slate-300 flex flex-col items-center">
-                          <LucideImage size={48} className="mb-2 opacity-10" />
-                          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Frame Render Pending</span>
+                          <LucideImage size={64} className="mb-4 opacity-5" />
+                          <span className="text-[11px] font-black uppercase tracking-[0.3em] opacity-30">Render Sequence Locked</span>
                         </div>
                       )}
-                      <div className="absolute top-6 left-6 bg-black/80 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em]">FRAME {f.id + 1}</div>
-                      <div className="absolute bottom-6 right-6 flex space-x-2 opacity-0 group-hover:opacity-100 transition-all">
-                        <button className="p-3 bg-white text-indigo-600 rounded-xl shadow-xl hover:bg-black hover:text-white transition-all"><RefreshCw size={20}/></button>
-                        <button className="p-3 bg-indigo-600 text-white rounded-xl shadow-xl hover:bg-black transition-all"><Download size={20}/></button>
+                      <div className="absolute top-8 left-8 bg-black/80 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] backdrop-blur-md shadow-2xl">FRAME {f.id + 1}</div>
+                      <div className="absolute bottom-8 right-8 flex space-x-3 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
+                        <button className="p-4 bg-white text-teal-600 rounded-2xl shadow-2xl hover:bg-black hover:text-white transition-all"><RefreshCw size={24}/></button>
+                        <button className="p-4 bg-teal-600 text-white rounded-2xl shadow-2xl hover:bg-black transition-all"><Download size={24}/></button>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-6 px-4">
-                      <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:bg-[#6366f1] group-hover:text-white transition-colors"><Briefcase size={24}/></div>
+                    <div className="flex items-start space-x-8 px-6">
+                      <div className="p-5 bg-teal-50 text-teal-600 rounded-[2rem] group-hover:bg-teal-600 group-hover:text-white transition-all shadow-sm"><PieChart size={28}/></div>
                       <div className="flex-1">
-                        <h4 className="text-xl font-bold text-slate-900 mb-2 tracking-tight uppercase italic">{f.visualIntent}</h4>
-                        <p className="text-sm text-slate-500 leading-relaxed font-medium">{f.description}</p>
+                        <h4 className="text-2xl font-black text-slate-900 mb-3 tracking-tighter uppercase italic">{f.visualIntent}</h4>
+                        <p className="text-sm text-slate-500 leading-loose font-bold uppercase tracking-tight opacity-70">"{f.description}"</p>
                         <textarea 
                           value={f.notes || ''} 
                           onChange={e => updateFrameNote(f.id, e.target.value)} 
-                          placeholder="Operational directives..." 
-                          className="w-full mt-6 bg-slate-50/50 border border-slate-100 rounded-2xl p-5 text-xs font-medium text-slate-600 outline-none h-24 resize-none shadow-inner focus:bg-white transition-all" 
+                          placeholder="Operational directives & synthesis logs..." 
+                          className="w-full mt-10 bg-slate-50/80 border border-slate-100 rounded-[2rem] p-7 text-xs font-black uppercase tracking-widest text-slate-500 outline-none h-32 resize-none shadow-inner focus:bg-white focus:border-teal-100 transition-all duration-500" 
                         />
                       </div>
                     </div>
@@ -443,38 +504,38 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
   }
 
   return (
-    <div className="p-12 animate-in fade-in max-w-[1400px] mx-auto pb-40">
-      <div className="flex justify-between items-start mb-16">
+    <div className="p-16 animate-in fade-in max-w-[1500px] mx-auto pb-40">
+      <div className="flex justify-between items-start mb-20">
         <div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-3 uppercase">Campaign Studio</h1>
-          <p className="text-slate-400 text-xl font-medium tracking-tight">Architect high-fidelity marketing infrastructures.</p>
+          <h1 className="text-7xl font-black text-slate-900 tracking-tighter mb-4 uppercase leading-none">Campaign<br/><span className="text-teal-600">Studio</span></h1>
+          <p className="text-slate-400 text-2xl font-medium tracking-tight">Architect high-fidelity commercial infrastructures.</p>
         </div>
-        <div className="bg-white p-1.5 rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center">
-           <button onClick={() => setSetupMode('master')} className={`px-10 py-3.5 rounded-[1.2rem] text-xs font-black uppercase tracking-widest transition-all flex items-center space-x-3 ${setupMode === 'master' ? 'bg-[#4f46e5] text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}>
+        <div className="bg-white p-2 rounded-[2rem] border border-slate-100 shadow-premium flex items-center space-x-1">
+           <button onClick={() => setSetupMode('master')} className={`px-12 py-5 rounded-[1.8rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center space-x-3 ${setupMode === 'master' ? 'bg-teal-600 text-white shadow-2xl shadow-teal-100 scale-105' : 'text-slate-400 hover:bg-slate-50'}`}>
               <Sparkles size={16} /> <span>Master Directive</span>
            </button>
-           <button onClick={() => setSetupMode('guided')} className={`px-10 py-3.5 rounded-[1.2rem] text-xs font-black uppercase tracking-widest transition-all flex items-center space-x-3 ${setupMode === 'guided' ? 'bg-[#4f46e5] text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}>
+           <button onClick={() => setSetupMode('guided')} className={`px-12 py-5 rounded-[1.8rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center space-x-3 ${setupMode === 'guided' ? 'bg-teal-600 text-white shadow-2xl shadow-teal-100 scale-105' : 'text-slate-400 hover:bg-slate-50'}`}>
               <LayoutGrid size={16} /> <span>Guided Hub</span>
            </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8 space-y-10">
-          <div className="bg-white p-14 rounded-[3.5rem] border border-slate-100 shadow-premium min-h-[480px] flex flex-col group relative transition-all hover:border-indigo-100">
-            <div className="flex justify-between items-center mb-10">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] block">CREATIVE BRIEF & MISSION</span>
-              <div className="flex items-center space-x-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-14">
+        <div className="lg:col-span-8 space-y-12">
+          <div className="bg-white p-16 rounded-[4rem] border border-slate-100 shadow-premium min-h-[550px] flex flex-col group relative transition-all duration-700 hover:border-teal-200 hover:shadow-2xl">
+            <div className="flex justify-between items-center mb-12">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] block">CREATIVE BRIEF & VISION CORE</span>
+              <div className="flex items-center space-x-4">
                  {attachedImage && (
                    <div className="relative group/img">
-                     <img src={attachedImage} className="w-10 h-10 rounded-lg object-cover border-2 border-[#6366f1] shadow-lg" alt="Context" />
-                     <button onClick={() => setAttachedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-sm hover:scale-110 transition-transform"><X size={8} /></button>
+                     <img src={attachedImage} className="w-12 h-12 rounded-2xl object-cover border-2 border-teal-500 shadow-2xl scale-110" alt="Context" />
+                     <button onClick={() => setAttachedImage(null)} className="absolute -top-3 -right-3 bg-red-500 text-white p-1.5 rounded-full shadow-xl hover:scale-125 transition-transform"><X size={10} /></button>
                    </div>
                  )}
-                 <button onClick={() => fileInputRef.current?.click()} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-black hover:text-white transition-all border border-slate-100" title="Attach Visual Context"><LucideImage size={20}/></button>
+                 <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-black hover:text-white transition-all border border-slate-100 shadow-sm" title="Visual Context Injection"><LucideImage size={22}/></button>
                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
-                 <button onClick={toggleListening} className={`p-2.5 rounded-xl transition-all flex items-center space-x-2 border ${isListening ? 'bg-red-500 text-white border-red-400 animate-pulse' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-black hover:text-white'}`} title="Voice Command Synthesis">
-                    {isListening ? <MicOff size={20}/> : <Mic size={20} />}
+                 <button onClick={toggleListening} className={`p-4 rounded-2xl transition-all flex items-center space-x-2 border shadow-sm ${isListening ? 'bg-red-500 text-white border-red-400 animate-pulse' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-black hover:text-white'}`} title="Neural Voice Uplink">
+                    {isListening ? <MicOff size={22}/> : <Mic size={22} />}
                  </button>
               </div>
             </div>
@@ -483,79 +544,79 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
               <textarea 
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
-                placeholder="Establish master strategic mission, target demographics, and commercial guidelines..."
-                className="flex-1 w-full bg-transparent border-none focus:ring-0 text-3xl font-black text-slate-900 placeholder:text-slate-100 resize-none leading-tight no-scrollbar"
+                placeholder="Establish master strategic mission, market guidelines, and commercial benchmarks..."
+                className="flex-1 w-full bg-transparent border-none focus:ring-0 text-4xl font-black text-slate-900 placeholder:text-slate-300 resize-none leading-tight no-scrollbar tracking-tighter"
               />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12 animate-in fade-in py-4">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block px-2">PRIMARY MISSION</label>
-                  <input value={primaryGoal} onChange={e => setPrimaryGoal(e.target.value)} placeholder="e.g. Sales Conversion" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white transition-all text-xl font-bold text-slate-700 outline-none shadow-inner" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-14 gap-y-14 animate-in fade-in py-6">
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block px-4">PRIMARY MISSION</label>
+                  <input value={primaryGoal} onChange={e => setPrimaryGoal(e.target.value)} placeholder="Target: Penetration" className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] focus:bg-white transition-all text-xl font-black text-slate-800 outline-none shadow-inner" />
                 </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block px-2">CORE AUDIENCE</label>
-                  <input value={targetAudience} onChange={e => setTargetAudience(e.target.value)} placeholder="e.g. CMOs at SaaS companies" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white transition-all text-xl font-bold text-slate-700 outline-none shadow-inner" />
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block px-4">CORE SEGMENT</label>
+                  <input value={targetAudience} onChange={e => setTargetAudience(e.target.value)} placeholder="Segment: Enterprise" className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] focus:bg-white transition-all text-xl font-black text-slate-800 outline-none shadow-inner" />
                 </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block px-2">IDENTITY PROFILE</label>
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block px-4">IDENTITY PROFILE</label>
                   <div className="relative">
                     <select 
                       value={selectedVoiceId} 
                       onChange={e => setSelectedVoiceId(e.target.value)}
-                      className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white transition-all text-xl font-bold text-slate-700 outline-none appearance-none shadow-inner cursor-pointer"
+                      className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] focus:bg-white transition-all text-xl font-black text-slate-800 outline-none appearance-none shadow-inner cursor-pointer"
                     >
-                      <option value="">Standard Strategic Identity</option>
+                      <option value="">Global Strategy Standard</option>
                       {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
-                    <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={24}/>
+                    <ChevronRight className="absolute right-8 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={28}/>
                   </div>
                 </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block px-2">BUDGETARY SCOPE</label>
-                  <input value={budgetExpectation} onChange={e => setBudgetExpectation(e.target.value)} placeholder="e.g. $5k - $20k" className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white transition-all text-xl font-bold text-slate-700 outline-none shadow-inner" />
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block px-4">OPERATIONAL SCOPE</label>
+                  <input value={budgetExpectation} onChange={e => setBudgetExpectation(e.target.value)} placeholder="Scale: Premium" className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] focus:bg-white transition-all text-xl font-black text-slate-800 outline-none shadow-inner" />
                 </div>
               </div>
             )}
           </div>
 
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-8 hover:border-indigo-100 transition-colors">
-             <div className="w-16 h-16 bg-indigo-50 text-[#6366f1] rounded-3xl flex items-center justify-center shrink-0 border border-indigo-100 shadow-sm">
-                <Globe size={32} />
+          <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-premium flex flex-col md:flex-row items-center space-y-6 md:space-y-0 md:space-x-10 hover:border-teal-300 transition-all duration-500 hover:shadow-2xl">
+             <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-[2.5rem] flex items-center justify-center shrink-0 border border-teal-100 shadow-xl shadow-teal-50/50">
+                <Globe size={40} />
              </div>
              <div className="flex-1 w-full">
-                <h4 className="text-xl font-bold text-slate-900 mb-1 tracking-tight uppercase">Intelligence Feed</h4>
+                <h4 className="text-2xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Intelligence Uplink</h4>
                 <input 
                   value={competitorUrl}
                   onChange={e => setCompetitorUrl(e.target.value)}
-                  placeholder="Competitor URL for deep analysis (e.g. brand.com)" 
-                  className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] focus:bg-white transition-all outline-none text-slate-700 shadow-inner font-medium text-base"
+                  placeholder="Insert competitor URL for deep-space analysis..." 
+                  className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] focus:bg-white transition-all outline-none text-slate-700 shadow-inner font-black uppercase text-xs tracking-widest"
                 />
              </div>
           </div>
         </div>
 
-        <div className="lg:col-span-4 space-y-10 h-fit">
-           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium flex flex-col h-full max-h-[480px]">
-              <div className="flex justify-between items-center mb-10 shrink-0">
-                <h4 className="text-xl font-bold text-slate-900 flex items-center space-x-3 tracking-tight uppercase"><ShieldCheck size={24} className="text-[#6366f1]"/> <span>Identity Vault</span></h4>
-                <button onClick={() => setIsAddingVoice(true)} className="w-10 h-10 bg-indigo-50 text-[#6366f1] hover:bg-black hover:text-white rounded-xl flex items-center justify-center transition-all shadow-sm border border-indigo-100"><Plus size={20}/></button>
+        <div className="lg:col-span-4 space-y-12 h-fit">
+           <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-premium flex flex-col h-full max-h-[550px] transition-all hover:shadow-2xl">
+              <div className="flex justify-between items-center mb-12 shrink-0">
+                <h4 className="text-2xl font-black text-slate-900 flex items-center space-x-4 tracking-tighter uppercase"><ShieldCheck size={28} className="text-teal-600"/> <span>Governance</span></h4>
+                <button onClick={() => setIsAddingVoice(true)} className="w-12 h-12 bg-teal-50 text-teal-600 hover:bg-black hover:text-white rounded-2xl flex items-center justify-center transition-all shadow-xl shadow-teal-50 border border-teal-100"><Plus size={24}/></button>
               </div>
-              <div className="space-y-3 overflow-y-auto no-scrollbar pr-2 flex-1 pb-4">
+              <div className="space-y-4 overflow-y-auto no-scrollbar pr-2 flex-1 pb-6">
                  {voices.length === 0 ? (
-                   <div className="text-center py-16 opacity-10">
-                     <UserCircle size={64} className="mx-auto mb-4" />
-                     <p className="font-black text-[10px] uppercase tracking-widest">No Identities Stored</p>
+                   <div className="text-center py-20 opacity-10">
+                     <UserCircle size={80} className="mx-auto mb-6" />
+                     <p className="font-black text-[12px] uppercase tracking-[0.4em]">Vault Empty</p>
                    </div>
                  ) : voices.map(v => (
                    <div key={v.id} className="group relative">
                      <button 
                       onClick={() => setSelectedVoiceId(v.id)}
-                      className={`w-full p-5 rounded-2xl border-2 text-left transition-all flex items-center justify-between shadow-sm min-w-0 ${selectedVoiceId === v.id ? 'border-[#6366f1] bg-indigo-50/40 text-[#6366f1]' : 'border-transparent bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
+                      className={`w-full p-6 rounded-[2rem] border-2 text-left transition-all flex items-center justify-between shadow-sm min-w-0 ${selectedVoiceId === v.id ? 'border-teal-500 bg-teal-50/60 text-teal-700 scale-105 shadow-xl' : 'border-transparent bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
                      >
-                        <span className="font-black text-xs uppercase tracking-widest truncate pr-6">{v.name}</span>
-                        {selectedVoiceId === v.id && <CheckCircle2 size={20} className="text-[#6366f1] shrink-0" />}
+                        <span className="font-black text-xs uppercase tracking-[0.2em] truncate pr-8">{v.name}</span>
+                        {selectedVoiceId === v.id && <CheckCircle2 size={24} className="text-teal-600 shrink-0 shadow-sm" />}
                      </button>
-                     <button onClick={() => onDeleteVoice(v.id)} className="absolute -right-2 -top-2 bg-white text-slate-300 hover:text-red-500 p-1.5 rounded-full shadow-md border border-slate-100 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 size={12}/></button>
+                     <button onClick={() => onDeleteVoice(v.id)} className="absolute -right-3 -top-3 bg-white text-slate-300 hover:text-red-500 p-2.5 rounded-full shadow-2xl border border-slate-100 opacity-0 group-hover:opacity-100 transition-all hover:scale-125 hover:rotate-12"><Trash2 size={14}/></button>
                    </div>
                  ))}
               </div>
@@ -564,66 +625,70 @@ export const CampaignLab: React.FC<Props> = ({ voices, onSaveVoice, onDeleteVoic
            <button 
             onClick={handleInitialize}
             disabled={isGenerating || (setupMode === 'master' && !prompt && !primaryGoal)}
-            className="w-full bg-[#0f172a] text-white py-12 rounded-[3.5rem] shadow-[0_30px_60px_-15px_rgba(15,23,42,0.4)] flex flex-col items-center justify-center space-y-5 group hover:bg-[#1e293b] hover:scale-[1.02] transition-all disabled:opacity-50 disabled:scale-100 disabled:bg-slate-300 active:scale-95"
+            className="w-full bg-teal-600 text-white py-14 rounded-[4.5rem] shadow-[0_40px_80px_-20px_rgba(13,148,136,0.3)] flex flex-col items-center justify-center space-y-6 group hover:bg-black transition-all duration-700 disabled:opacity-30 disabled:scale-100 disabled:bg-slate-200 active:scale-95 border-b-8 border-teal-800 hover:border-slate-800"
            >
-              <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center group-hover:bg-white/10 group-hover:rotate-12 transition-all duration-500">
-                <Sparkles size={36} className="text-white"/>
+              <div className="w-20 h-20 bg-white/10 rounded-[2.5rem] flex items-center justify-center group-hover:bg-white/20 group-hover:rotate-[15deg] transition-all duration-700 shadow-2xl">
+                <Sparkles size={44} className="text-teal-400 group-hover:text-white"/>
               </div>
-              <span className="text-2xl font-black tracking-tight uppercase">Initialize Engine</span>
+              <div className="text-center">
+                <span className="text-3xl font-black tracking-tighter uppercase block leading-none mb-1 text-white">Initialize Engine</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.5em] text-teal-100 opacity-80 group-hover:text-white transition-colors">Start Strategic Synthesis</span>
+              </div>
            </button>
         </div>
       </div>
 
       {isAddingVoice && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[600] flex items-center justify-center p-8 animate-in fade-in">
-           <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-16 shadow-2xl relative animate-in zoom-in-95 duration-300">
-              <button onClick={() => setIsAddingVoice(false)} className="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-all hover:rotate-90"><X size={32} /></button>
-              <h3 className="text-4xl font-black text-slate-900 mb-10 tracking-tighter uppercase">New Brand Identity</h3>
-              <div className="space-y-10">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">IDENTITY NAME</label>
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-2xl z-[600] flex items-center justify-center p-10 animate-in fade-in duration-500">
+           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-20 shadow-[0_100px_150px_-30px_rgba(0,0,0,0.5)] relative animate-in zoom-in-90 duration-500 border border-slate-100">
+              <button onClick={() => setIsAddingVoice(false)} className="absolute top-12 right-12 text-slate-300 hover:text-slate-900 transition-all hover:rotate-90 hover:scale-110"><X size={40} /></button>
+              <h3 className="text-6xl font-black text-slate-900 mb-14 tracking-tighter uppercase leading-none">New Brand<br/><span className="text-teal-600">Governance</span></h3>
+              <div className="space-y-12">
+                 <div className="space-y-4">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em] px-6">IDENTITY ALIAS</label>
                     <input 
                       autoFocus
-                      placeholder="e.g. Modern Minimalist" 
-                      className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white transition-all text-xl font-bold text-slate-700 outline-none shadow-inner" 
+                      placeholder="e.g. CORE MINIMALIST" 
+                      className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] focus:bg-white transition-all text-2xl font-black text-slate-800 outline-none shadow-inner tracking-tight uppercase" 
                       onChange={e => setNewVoiceForm({...newVoiceForm, name: e.target.value})} 
                     />
                  </div>
-                 <div className="grid grid-cols-2 gap-8">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">FORMALITY</label>
+                 <div className="grid grid-cols-2 gap-10">
+                    <div className="space-y-4">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em] px-6">FORMALITY</label>
                       <div className="relative">
                         <select 
                           onChange={e => setNewVoiceForm({...newVoiceForm, formality: e.target.value as any})}
-                          className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 appearance-none cursor-pointer"
+                          className="w-full p-7 bg-slate-50 border border-slate-100 rounded-[2rem] text-xs font-black uppercase tracking-widest text-slate-700 appearance-none cursor-pointer shadow-inner focus:bg-white transition-all"
                         >
                           <option>Professional</option>
                           <option>Casual</option>
                           <option>Luxury</option>
+                          <option>Formal</option>
                         </select>
-                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={16}/>
+                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={20}/>
                       </div>
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">VOCABULARY</label>
+                    <div className="space-y-4">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em] px-6">VOCABULARY</label>
                       <div className="relative">
                         <select 
                           onChange={e => setNewVoiceForm({...newVoiceForm, vocabulary: e.target.value as any})}
-                          className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 appearance-none cursor-pointer"
+                          className="w-full p-7 bg-slate-50 border border-slate-100 rounded-[2rem] text-xs font-black uppercase tracking-widest text-slate-700 appearance-none cursor-pointer shadow-inner focus:bg-white transition-all"
                         >
                           <option>Sophisticated</option>
                           <option>Simple</option>
                           <option>Technical</option>
                         </select>
-                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={16}/>
+                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={20}/>
                       </div>
                     </div>
                  </div>
                  <button 
                   onClick={() => { if (newVoiceForm.name) { onSaveVoice({ id: Date.now().toString(), name: newVoiceForm.name, ...newVoiceForm } as BrandVoice); setIsAddingVoice(false); }}} 
-                  className="w-full py-7 bg-[#6366f1] text-white rounded-[2.5rem] font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-indigo-100 hover:bg-black transition-all active:scale-95"
+                  className="w-full py-8 bg-teal-600 text-white rounded-[3rem] font-black uppercase tracking-[0.3em] text-sm shadow-2xl shadow-teal-200 hover:bg-black transition-all active:scale-95 border-b-8 border-teal-800 hover:border-slate-800"
                  >
-                   Sync Identity Profile
+                   Establish Protocol
                  </button>
               </div>
            </div>

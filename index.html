@@ -15,19 +15,18 @@
       background-color: #fcfcfc;
       color: #000000;
       -webkit-font-smoothing: antialiased;
-      overflow: hidden; /* Prevent body scroll, handle in main containers */
+      overflow: hidden;
     }
     
-    /* Custom Scrollbar */
+    /* Custom Scrollbar - Updated to Teal */
     .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #0d9488; border-radius: 10px; }
     
-    /* Utility for clipping/overlapping issues */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     
     .shadow-premium {
-      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.08);
     }
 
     .animate-elite-entry {
@@ -38,9 +37,6 @@
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
-    /* Fixed height constraints for components */
-    .input-node-height { min-height: 180px; }
   </style>
 <script type="importmap">
 {
@@ -54,7 +50,7 @@
 }
 </script>
 </head>
-<body class="cream-bg">
+<body>
   <div id="root"></div>
 </body>
 </html>
